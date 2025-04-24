@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>瀑布流内容</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+        
+        .container {
+            padding: 10px;
+        }
+        
+        .waterfall {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+        
+        .column {
+            flex: 0 0 calc(50% - 5px);
+            max-width: calc(50% - 5px);
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-media {
+            width: 100%;
+            position: relative;
+            padding-top: 100%;
+            overflow: hidden;
+        }
+        
+        .card-media img, .card-media video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .card-content {
+            padding: 10px;
+        }
+        
+        .card-title {
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .card-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .video-play-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .refresh-indicator {
+            text-align: center;
+            padding: 15px 0;
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .loading-indicator {
+            text-align: center;
+            padding: 15px 0;
+            font-size: 14px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="refresh-indicator" id="refreshIndicator">下拉刷新</div>
+        <div class="waterfall" id="waterfall">
+            <div class="column" id="column1"></div>
+            <div class="column" id="column2"></div>
+        </div>
+        <div class="loading-indicator" id="loadingIndicator">上拉加载更多</div>
+    </div>
+
+<script>
+
+
+
+
+
+
+
+function getUrlParams() {
+    const params = {};
+    const queryString = window.location.search.substring(1);
+    const pairs = queryString.split('&');
+    
+    pairs.forEach(pair => {
+        const [key, value] = pair.split('=');
+        if (key) {
+            params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+        }
+    });
+    
+    return params;
+}
+
+// 根据URL参数生成不同的Mock数据
+function generateMockData(count, params) {
+    const { category = 'default', theme = 'light', size = 'medium' } = params;
+    
+    // 定义不同类别的标题
+    const categories = {
+        nature: ["美丽的自然风光", "壮丽的山川河流", "宁静的湖泊", "森林探险"],
+        animals: ["可爱的宠物", "野生动物摄影", "海洋生物", "鸟类观察"],
+        food: ["美食分享", "烹饪教程", "餐厅推荐", "食材展示"],
+        travel: ["旅行日记", "景点推荐", "酒店体验", "文化探索"],
+        default: ["精彩内容", "生活分享", "创意作品", "日常瞬间"]
+    };
+    
+    // 定义不同主题的颜色
+    const themes = {
+        light: { bg: '#ffffff', text: '#333333' },
+        dark: { bg: '#333333', text: '#ffffff' },
+        blue: { bg: '#f0f8ff', text: '#0066cc' }
+    };
+    
+    // 定义不同大小的图片尺寸
+    const sizes = {
+        small: { width: 300, height: 200 },
+        medium: { width: 400, height: 300 },
+        large: { width: 500, height: 400 }
+    };
+    
+    const mockData = [];
+    const mediaTypes = ['image', 'video'];
+    const titles = categories[category] || categories.default;
+    const colors = themes[theme] || themes.light;
+    const dimensions = sizes[size] || sizes.medium;
+    
+    for (let i = 0; i < count; i++) {
+        const randomType = mediaTypes[Math.floor(Math.random() * mediaTypes.length)];
+        const randomTitle = titles[Math.floor(Math.random() * titles.length)];
+        const randomLikes = Math.floor(Math.random() * 1000);
+        const randomComments = Math.floor(Math.random() * 500);
+        
+        let mediaUrl;
+        if (randomType === 'image') {
+            // 根据参数生成不同的图片
+            const { width, height } = dimensions;
+            const seed = `${category}-${i}-${Date.now()}`;
+            mediaUrl = `https://picsum.photos/${width}/${height}?random=${seed}`;
+        } else {
+            // 使用示例视频
+            const videos = {
+                nature: 'https://samplelib.com/lib/preview/mp4/sample-5s.mp4',
+                animals: 'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
+                food: 'https://samplelib.com/lib/preview/mp4/sample-15s.mp4',
+                default: 'https://samplelib.com/lib/preview/mp4/sample-20s.mp4'
+            };
+            mediaUrl = videos[category] || videos.default;
+        }
+        
+        mockData.push({
+            id: `post-${category}-${Date.now()}-${i}`,
+            title: `${randomTitle} #${i+1}`,
+            mediaType: randomType,
+            mediaUrl: mediaUrl,
+            likes: randomLikes,
+            comments: randomComments,
+            heightRatio: 0.8 + Math.random() * 0.4, // 随机高度比例
+            theme: colors
+        });
+    }
+    
+    return mockData;
+}
+
+
+
+// 瀑布流类
+class Waterfall {
+    constructor(options) {
+        this.container = options.container;
+        this.columns = options.columns;
+        this.loadMore = options.loadMore;
+        this.onRefresh = options.onRefresh;
+        this.pageSize = options.pageSize || 10;
+        
+        this.isLoading = false;
+        this.isRefreshing = false;
+        this.data = [];
+        this.columnHeights = [0, 0];
+        this.urlParams = getUrlParams();
+        
+        this.init();
+        this.applyTheme(this.urlParams.theme);
+    }
+    applyTheme(theme) {
+        const themes = {
+            light: { bg: '#ffffff', text: '#333333' },
+            dark: { bg: '#333333', text: '#ffffff' },
+            blue: { bg: '#f0f8ff', text: '#0066cc' }
+        };
+        
+        const selectedTheme = themes[theme] || themes.light;
+        document.body.style.backgroundColor = selectedTheme.bg;
+        document.body.style.color = selectedTheme.text;
+    }
+
+    init() {
+        this.setupPullToRefresh();
+        this.setupInfiniteScroll();
+        this.loadData();
+    }
+    
+    setupPullToRefresh() {
+        const refreshIndicator = document.getElementById('refreshIndicator');
+        let startY = 0;
+        let currentY = 0;
+        let isDragging = false;
+        
+        document.addEventListener('touchstart', (e) => {
+            if (window.scrollY <= 0 && !this.isRefreshing) {
+                startY = e.touches[0].pageY;
+                isDragging = true;
+            }
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            currentY = e.touches[0].pageY;
+            const distance = currentY - startY;
+            
+            if (distance > 0 && window.scrollY <= 0) {
+                e.preventDefault();
+                const pullDistance = Math.min(distance, 100);
+                refreshIndicator.style.transform = `translateY(${pullDistance}px)`;
+                
+                if (pullDistance > 60) {
+                    refreshIndicator.textContent = '释放刷新';
+                } else {
+                    refreshIndicator.textContent = '下拉刷新';
+                }
+            }
+        });
+        
+        document.addEventListener('touchend', () => {
+            if (!isDragging) return;
+            
+            isDragging = false;
+            const distance = currentY - startY;
+            
+            if (distance > 60 && window.scrollY <= 0) {
+                this.refreshIndicator.textContent = '刷新中...';
+                this.isRefreshing = true;
+                this.onRefresh().then(() => {
+                    this.refreshIndicator.textContent = '下拉刷新';
+                    this.refreshIndicator.style.transform = 'translateY(0)';
+                    this.isRefreshing = false;
+                });
+            } else {
+                this.refreshIndicator.style.transform = 'translateY(0)';
+            }
+        });
+    }
+    
+    setupInfiniteScroll() {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && !this.isLoading) {
+                this.loadData();
+            }
+        }, {
+            threshold: 0.1
+        });
+        
+        observer.observe(loadingIndicator);
+    }
+    
+    async loadData() {
+        if (this.isLoading) return;
+        
+        this.isLoading = true;
+        document.getElementById('loadingIndicator').textContent = '加载中...';
+        
+        try {
+            const newData = await this.loadMore(this.pageSize);
+            this.data = [...this.data, ...newData];
+            this.renderItems(newData);
+        } catch (error) {
+            console.error('加载数据失败:', error);
+            document.getElementById('loadingIndicator').textContent = '加载失败，点击重试';
+            document.getElementById('loadingIndicator').onclick = () => this.loadData();
+        } finally {
+            this.isLoading = false;
+            document.getElementById('loadingIndicator').textContent = '上拉加载更多';
+        }
+    }
+    
+    async refreshData() {
+        this.isRefreshing = true;
+        document.getElementById('refreshIndicator').textContent = '刷新中...';
+        
+        try {
+            const newData = await this.onRefresh(this.pageSize);
+            this.data = newData;
+            this.clear();
+            this.renderItems(newData);
+        } catch (error) {
+            console.error('刷新数据失败:', error);
+            document.getElementById('refreshIndicator').textContent = '刷新失败，下拉重试';
+        } finally {
+            this.isRefreshing = false;
+            document.getElementById('refreshIndicator').textContent = '下拉刷新';
+        }
+    }
+    
+    clear() {
+        this.columns.forEach(column => {
+            column.innerHTML = '';
+        });
+    }
+    
+    renderItems(items) {
+        items.forEach(item => {
+            const column = this.getShortestColumn();
+            const card = this.createCard(item);
+            column.appendChild(card);
+        });
+    }
+    
+    // getShortestColumn() {
+    //     const heights = this.columns.map(column => column.offsetHeight);
+    //     const minHeight = Math.min(...heights);
+    //     const index = heights.indexOf(minHeight);
+    //     return this.columns[index];
+    // }
+
+
+
+
+
+
+    getShortestColumn() {
+        // 使用 getBoundingClientRect() 获取更精确的高度
+        const heights = this.columns.map(column => {
+            return column.getBoundingClientRect().height;
+        });
+        
+        // 第一次加载时平均分配
+        if (heights[0] === 0 && heights[1] === 0) {
+            return Math.random() > 0.5 ? this.columns[1] : this.columns[0];
+        }
+        return Math.random() > 0.5 ? this.columns[1] : this.columns[0];
+        // return heights[0] <= heights[1] ? this.columns[0] : this.columns[1];
+    }
+    
+    createCard(item) {
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.dataset.id = item.id;
+        card.style.backgroundColor = item.theme.bg;
+        card.style.color = item.theme.text;
+        
+        const mediaContainer = document.createElement('div');
+        mediaContainer.className = 'card-media';
+        mediaContainer.style.paddingTop = `${item.heightRatio * 100}%`;
+        
+        if (item.mediaType === 'image') {
+            const img = document.createElement('img');
+            img.src = item.mediaUrl;
+            img.alt = item.title;
+            img.loading = 'lazy';
+            mediaContainer.appendChild(img);
+        } else {
+            const videoContainer = document.createElement('div');
+            videoContainer.style.position = 'relative';
+            
+            const video = document.createElement('video');
+            video.src = item.mediaUrl;
+            video.playsInline = true;
+            video.preload = 'metadata';
+            
+            const playIcon = document.createElement('div');
+            playIcon.className = 'video-play-icon';
+            playIcon.innerHTML = '▶';
+            
+            videoContainer.appendChild(video);
+            videoContainer.appendChild(playIcon);
+            
+            videoContainer.addEventListener('click', () => {
+                if (video.paused) {
+                    video.play();
+                    playIcon.style.display = 'none';
+                } else {
+                    video.pause();
+                    playIcon.style.display = 'flex';
+                }
+            });
+            
+            mediaContainer.appendChild(videoContainer);
+        }
+        
+        const content = document.createElement('div');
+        content.className = 'card-content';
+        
+        const title = document.createElement('div');
+        title.className = 'card-title';
+        title.textContent = item.title;
+        
+        const meta = document.createElement('div');
+        meta.className = 'card-meta';
+        meta.innerHTML = `
+            <span>❤️ ${item.likes}</span>
+            <span>💬 ${item.comments}</span>
+        `;
+        
+        content.appendChild(title);
+        content.appendChild(meta);
+        
+        card.appendChild(mediaContainer);
+        card.appendChild(content);
+        
+        return card;
+    }
+}
+// 初始化瀑布流
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = getUrlParams();
+    
+    const waterfall = new Waterfall({
+        container: document.getElementById('waterfall'),
+        columns: [document.getElementById('column1'), document.getElementById('column2')],
+        pageSize: 10,
+        loadMore: async (count) => {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return generateMockData(count, urlParams);
+        },
+        onRefresh: async (count) => {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return generateMockData(count, urlParams);
+        }
+    });
+    
+    // 在标题显示当前类别
+    if (urlParams.category) {
+        document.title = `${urlParams.category} - 瀑布流展示`;
+    }
+});
+</script>
+</body>
+</html>
