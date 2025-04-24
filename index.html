@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>瀑布流内容</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+        
+        .container {
+            padding: 10px;
+        }
+        
+        .waterfall {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+        
+        .column {
+            flex: 0 0 calc(50% - 5px);
+            max-width: calc(50% - 5px);
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-media {
+            width: 100%;
+            position: relative;
+            padding-top: 100%;
+            overflow: hidden;
+        }
+        
+        .card-media img, .card-media video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .card-content {
+            padding: 10px;
+        }
+        
+        .card-title {
+            font-size: 14px;
+            margin-bottom: 5px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .card-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .video-play-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .refresh-indicator {
+            text-align: center;
+            padding: 15px 0;
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .loading-indicator {
+            text-align: center;
+            padding: 15px 0;
+            font-size: 14px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="refresh-indicator" id="refreshIndicator">下拉刷新</div>
+        <div class="waterfall" id="waterfall">
+            <div class="column" id="column1"></div>
+            <div class="column" id="column2"></div>
+        </div>
+        <div class="loading-indicator" id="loadingIndicator">上拉加载更多</div>
+    </div>
+
+<script>
+       // Mock 数据生成器
+function generateMockData(count) {
+    const mockTitles = [
+        "这是一条有趣的动态",
+        "今天天气真好",
+        "分享我的生活瞬间",
+        "美食推荐",
+        "旅行日记",
+        "学习打卡",
+        "健身日常",
+        "宠物萌照",
+        "科技新闻",
+        "电影推荐"
+    ];
+    
+    const mockData = [];
+    const mediaTypes = ['image', 'video'];
+    
+    for (let i = 0; i < count; i++) {
+        const randomType = mediaTypes[Math.floor(Math.random() * mediaTypes.length)];
+        const randomTitle = mockTitles[Math.floor(Math.random() * mockTitles.length)];
+        const randomLikes = Math.floor(Math.random() * 1000);
+        const randomComments = Math.floor(Math.random() * 500);
+        
+        let mediaUrl;
+        if (randomType === 'image') {
+            // 使用随机图片服务
+            const width = 300 + Math.floor(Math.random() * 200);
+            const height = 400 + Math.floor(Math.random() * 300);
+            mediaUrl = `https://picsum.photos/${width}/${height}?random=${i}`;
+        } else {
+            // 使用示例视频
+            const videos = [
+                'https://samplelib.com/lib/preview/mp4/sample-5s.mp4',
+                'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
+                'https://samplelib.com/lib/preview/mp4/sample-15s.mp4'
+            ];
+            mediaUrl = videos[Math.floor(Math.random() * videos.length)];
+        }
+        
+        mockData.push({
+            id: `post-${Date.now()}-${i}`,
+            title: `${randomTitle} #${i+1}`,
+            mediaType: randomType,
+            mediaUrl: mediaUrl,
+            likes: randomLikes,
+            comments: randomComments,
+            heightRatio: 0.8 + Math.random() * 0.4 // 随机高度比例
+        });
+    }
+    
+    return mockData;
+}
+
+// 瀑布流类
+class Waterfall {
+    constructor(options) {
+        this.container = options.container;
+        this.columns = options.columns;
+        this.loadMore = options.loadMore;
+        this.onRefresh = options.onRefresh;
+        this.pageSize = options.pageSize || 10;
+        
+        this.isLoading = false;
+        this.isRefreshing = false;
+        this.data = [];
+        
+        this.init();
+    }
+    
+    init() {
+        this.setupPullToRefresh();
+        this.setupInfiniteScroll();
+        this.loadData();
+    }
+    
+    setupPullToRefresh() {
+        const refreshIndicator = document.getElementById('refreshIndicator');
+        let startY = 0;
+        let currentY = 0;
+        let isDragging = false;
+        
+        document.addEventListener('touchstart', (e) => {
+            if (window.scrollY <= 0 && !this.isRefreshing) {
+                startY = e.touches[0].pageY;
+                isDragging = true;
+            }
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            currentY = e.touches[0].pageY;
+            const distance = currentY - startY;
+            
+            if (distance > 0 && window.scrollY <= 0) {
+                e.preventDefault();
+                const pullDistance = Math.min(distance, 100);
+                refreshIndicator.style.transform = `translateY(${pullDistance}px)`;
+                
+                if (pullDistance > 60) {
+                    refreshIndicator.textContent = '释放刷新';
+                } else {
+                    refreshIndicator.textContent = '下拉刷新';
+                }
+            }
+        });
+        
+        document.addEventListener('touchend', () => {
+            if (!isDragging) return;
+            
+            isDragging = false;
+            const distance = currentY - startY;
+            
+            if (distance > 60 && window.scrollY <= 0) {
+                this.refreshIndicator.textContent = '刷新中...';
+                this.isRefreshing = true;
+                this.onRefresh().then(() => {
+                    this.refreshIndicator.textContent = '下拉刷新';
+                    this.refreshIndicator.style.transform = 'translateY(0)';
+                    this.isRefreshing = false;
+                });
+            } else {
+                this.refreshIndicator.style.transform = 'translateY(0)';
+            }
+        });
+    }
+    
+    setupInfiniteScroll() {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && !this.isLoading) {
+                this.loadData();
+            }
+        }, {
+            threshold: 0.1
+        });
+        
+        observer.observe(loadingIndicator);
+    }
+    
+    async loadData() {
+        if (this.isLoading) return;
+        
+        this.isLoading = true;
+        document.getElementById('loadingIndicator').textContent = '加载中...';
+        
+        try {
+            const newData = await this.loadMore(this.pageSize);
+            this.data = [...this.data, ...newData];
+            this.renderItems(newData);
+        } catch (error) {
+            console.error('加载数据失败:', error);
+            document.getElementById('loadingIndicator').textContent = '加载失败，点击重试';
+            document.getElementById('loadingIndicator').onclick = () => this.loadData();
+        } finally {
+            this.isLoading = false;
+            document.getElementById('loadingIndicator').textContent = '上拉加载更多';
+        }
+    }
+    
+    async refreshData() {
+        this.isRefreshing = true;
+        document.getElementById('refreshIndicator').textContent = '刷新中...';
+        
+        try {
+            const newData = await this.onRefresh(this.pageSize);
+            this.data = newData;
+            this.clear();
+            this.renderItems(newData);
+        } catch (error) {
+            console.error('刷新数据失败:', error);
+            document.getElementById('refreshIndicator').textContent = '刷新失败，下拉重试';
+        } finally {
+            this.isRefreshing = false;
+            document.getElementById('refreshIndicator').textContent = '下拉刷新';
+        }
+    }
+    
+    clear() {
+        this.columns.forEach(column => {
+            column.innerHTML = '';
+        });
+    }
+    
+    renderItems(items) {
+        items.forEach(item => {
+            const column = this.getShortestColumn();
+            const card = this.createCard(item);
+            column.appendChild(card);
+        });
+    }
+    
+    // getShortestColumn() {
+    //     const heights = this.columns.map(column => column.offsetHeight);
+    //     const minHeight = Math.min(...heights);
+    //     const index = heights.indexOf(minHeight);
+    //     return this.columns[index];
+    // }
+
+
+
+
+
+
+    getShortestColumn() {
+        // 使用 getBoundingClientRect() 获取更精确的高度
+        const heights = this.columns.map(column => {
+            return column.getBoundingClientRect().height;
+        });
+        
+        // 第一次加载时平均分配
+        if (heights[0] === 0 && heights[1] === 0) {
+            return Math.random() > 0.5 ? this.columns[1] : this.columns[0];
+        }
+        return Math.random() > 0.5 ? this.columns[1] : this.columns[0];
+        // return heights[0] <= heights[1] ? this.columns[0] : this.columns[1];
+    }
+    
+    createCard(item) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.dataset.id = item.id;
+        
+        const mediaContainer = document.createElement('div');
+        mediaContainer.className = 'card-media';
+        mediaContainer.style.paddingTop = `${item.heightRatio * 100}%`;
+        
+        if (item.mediaType === 'image') {
+            const img = document.createElement('img');
+            img.src = item.mediaUrl;
+            img.alt = item.title;
+            img.loading = 'lazy';
+            mediaContainer.appendChild(img);
+        } else {
+            const videoContainer = document.createElement('div');
+            videoContainer.style.position = 'relative';
+            
+            const video = document.createElement('video');
+            video.src = item.mediaUrl;
+            video.playsInline = true;
+            video.preload = 'metadata';
+            
+            const playIcon = document.createElement('div');
+            playIcon.className = 'video-play-icon';
+            playIcon.innerHTML = '▶';
+            
+            videoContainer.appendChild(video);
+            videoContainer.appendChild(playIcon);
+            
+            videoContainer.addEventListener('click', () => {
+                if (video.paused) {
+                    video.play();
+                    playIcon.style.display = 'none';
+                } else {
+                    video.pause();
+                    playIcon.style.display = 'flex';
+                }
+            });
+            
+            mediaContainer.appendChild(videoContainer);
+        }
+        
+        const content = document.createElement('div');
+        content.className = 'card-content';
+        
+        const title = document.createElement('div');
+        title.className = 'card-title';
+        title.textContent = item.title;
+        
+        const meta = document.createElement('div');
+        meta.className = 'card-meta';
+        meta.innerHTML = `
+            <span>❤️ ${item.likes}</span>
+            <span>💬 ${item.comments}</span>
+        `;
+        
+        content.appendChild(title);
+        content.appendChild(meta);
+        
+        card.appendChild(mediaContainer);
+        card.appendChild(content);
+        
+        return card;
+    }
+}
+
+// 初始化瀑布流
+document.addEventListener('DOMContentLoaded', () => {
+    const waterfall = new Waterfall({
+        container: document.getElementById('waterfall'),
+        columns: [document.getElementById('column1'), document.getElementById('column2')],
+        pageSize: 10,
+        loadMore: async (count) => {
+            // 模拟网络请求延迟
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return generateMockData(count);
+        },
+        onRefresh: async (count) => {
+            // 模拟网络请求延迟
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return generateMockData(count);
+        }
+    });
+});
+</script>
+</body>
+</html>
