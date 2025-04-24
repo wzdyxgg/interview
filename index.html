@@ -118,59 +118,100 @@
     </div>
 
 <script>
-       // Mock 数据生成器
-function generateMockData(count) {
-    const mockTitles = [
-        "这是一条有趣的动态",
-        "今天天气真好",
-        "分享我的生活瞬间",
-        "美食推荐",
-        "旅行日记",
-        "学习打卡",
-        "健身日常",
-        "宠物萌照",
-        "科技新闻",
-        "电影推荐"
-    ];
+
+
+
+
+
+
+
+function getUrlParams() {
+    const params = {};
+    const queryString = window.location.search.substring(1);
+    const pairs = queryString.split('&');
+    
+    pairs.forEach(pair => {
+        const [key, value] = pair.split('=');
+        if (key) {
+            params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+        }
+    });
+    
+    return params;
+}
+
+// 根据URL参数生成不同的Mock数据
+function generateMockData(count, params) {
+    const { category = 'default', theme = 'light', size = 'medium' } = params;
+    
+    // 定义不同类别的标题
+    const categories = {
+        nature: ["美丽的自然风光", "壮丽的山川河流", "宁静的湖泊", "森林探险"],
+        animals: ["可爱的宠物", "野生动物摄影", "海洋生物", "鸟类观察"],
+        food: ["美食分享", "烹饪教程", "餐厅推荐", "食材展示"],
+        travel: ["旅行日记", "景点推荐", "酒店体验", "文化探索"],
+        default: ["精彩内容", "生活分享", "创意作品", "日常瞬间"]
+    };
+    
+    // 定义不同主题的颜色
+    const themes = {
+        light: { bg: '#ffffff', text: '#333333' },
+        dark: { bg: '#333333', text: '#ffffff' },
+        blue: { bg: '#f0f8ff', text: '#0066cc' }
+    };
+    
+    // 定义不同大小的图片尺寸
+    const sizes = {
+        small: { width: 300, height: 200 },
+        medium: { width: 400, height: 300 },
+        large: { width: 500, height: 400 }
+    };
     
     const mockData = [];
     const mediaTypes = ['image', 'video'];
+    const titles = categories[category] || categories.default;
+    const colors = themes[theme] || themes.light;
+    const dimensions = sizes[size] || sizes.medium;
     
     for (let i = 0; i < count; i++) {
         const randomType = mediaTypes[Math.floor(Math.random() * mediaTypes.length)];
-        const randomTitle = mockTitles[Math.floor(Math.random() * mockTitles.length)];
+        const randomTitle = titles[Math.floor(Math.random() * titles.length)];
         const randomLikes = Math.floor(Math.random() * 1000);
         const randomComments = Math.floor(Math.random() * 500);
         
         let mediaUrl;
         if (randomType === 'image') {
-            // 使用随机图片服务
-            const width = 300 + Math.floor(Math.random() * 200);
-            const height = 400 + Math.floor(Math.random() * 300);
-            mediaUrl = `https://picsum.photos/${width}/${height}?random=${i}`;
+            // 根据参数生成不同的图片
+            const { width, height } = dimensions;
+            const seed = `${category}-${i}-${Date.now()}`;
+            mediaUrl = `https://picsum.photos/${width}/${height}?random=${seed}`;
         } else {
             // 使用示例视频
-            const videos = [
-                'https://9fe21841-4902-4926-a0fe-651a3f82db71.mdnplay.dev/shared-assets/videos/flower.mp4',
-                'https://9fe21841-4902-4926-a0fe-651a3f82db71.mdnplay.dev/shared-assets/videos/flower.mp4',
-                'https://9fe21841-4902-4926-a0fe-651a3f82db71.mdnplay.dev/shared-assets/videos/flower.mp4'
-            ];
-            mediaUrl = videos[Math.floor(Math.random() * videos.length)];
+            const videos = {
+                nature: 'https://samplelib.com/lib/preview/mp4/sample-5s.mp4',
+                animals: 'https://samplelib.com/lib/preview/mp4/sample-10s.mp4',
+                food: 'https://samplelib.com/lib/preview/mp4/sample-15s.mp4',
+                default: 'https://samplelib.com/lib/preview/mp4/sample-20s.mp4'
+            };
+            mediaUrl = videos[category] || videos.default;
         }
         
         mockData.push({
-            id: `post-${Date.now()}-${i}`,
+            id: `post-${category}-${Date.now()}-${i}`,
             title: `${randomTitle} #${i+1}`,
             mediaType: randomType,
             mediaUrl: mediaUrl,
             likes: randomLikes,
             comments: randomComments,
-            heightRatio: 0.8 + Math.random() * 0.4 // 随机高度比例
+            heightRatio: 0.8 + Math.random() * 0.4, // 随机高度比例
+            theme: colors
         });
     }
     
     return mockData;
 }
+
+
 
 // 瀑布流类
 class Waterfall {
@@ -184,10 +225,24 @@ class Waterfall {
         this.isLoading = false;
         this.isRefreshing = false;
         this.data = [];
+        this.columnHeights = [0, 0];
+        this.urlParams = getUrlParams();
         
         this.init();
+        this.applyTheme(this.urlParams.theme);
     }
-    
+    applyTheme(theme) {
+        const themes = {
+            light: { bg: '#ffffff', text: '#333333' },
+            dark: { bg: '#333333', text: '#ffffff' },
+            blue: { bg: '#f0f8ff', text: '#0066cc' }
+        };
+        
+        const selectedTheme = themes[theme] || themes.light;
+        document.body.style.backgroundColor = selectedTheme.bg;
+        document.body.style.color = selectedTheme.text;
+    }
+
     init() {
         this.setupPullToRefresh();
         this.setupInfiniteScroll();
@@ -338,9 +393,12 @@ class Waterfall {
     }
     
     createCard(item) {
+
         const card = document.createElement('div');
         card.className = 'card';
         card.dataset.id = item.id;
+        card.style.backgroundColor = item.theme.bg;
+        card.style.color = item.theme.text;
         
         const mediaContainer = document.createElement('div');
         mediaContainer.className = 'card-media';
@@ -404,24 +462,28 @@ class Waterfall {
         return card;
     }
 }
-
 // 初始化瀑布流
 document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = getUrlParams();
+    
     const waterfall = new Waterfall({
         container: document.getElementById('waterfall'),
         columns: [document.getElementById('column1'), document.getElementById('column2')],
         pageSize: 10,
         loadMore: async (count) => {
-            // 模拟网络请求延迟
             await new Promise(resolve => setTimeout(resolve, 1000));
-            return generateMockData(count);
+            return generateMockData(count, urlParams);
         },
         onRefresh: async (count) => {
-            // 模拟网络请求延迟
             await new Promise(resolve => setTimeout(resolve, 1000));
-            return generateMockData(count);
+            return generateMockData(count, urlParams);
         }
     });
+    
+    // 在标题显示当前类别
+    if (urlParams.category) {
+        document.title = `${urlParams.category} - 瀑布流展示`;
+    }
 });
 </script>
 </body>
